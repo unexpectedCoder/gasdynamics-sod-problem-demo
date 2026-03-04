@@ -1,0 +1,11 @@
+.*
+!.gitignore
+
+__*__
+
+*.pkl
+
+*.gif
+*.pdf
+*.png
+*.jpg
