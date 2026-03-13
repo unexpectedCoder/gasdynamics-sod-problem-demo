@@ -30,7 +30,7 @@ def make_motion_frame(step, time, positions, labels, figax=None):
     ax.set(
         xlabel="$x$",
         ylabel="$y$",
-        title=f"Итерация {step}, время {time:.3f}",
+        title=f"Итерация ${step}$, время ${time:.2f}$",
         aspect="equal",
     )
     ax.grid(False)
@@ -70,7 +70,7 @@ if __name__ == "__main__":
     print("Сохранение отдельных кадров...")
     frames_dir = pics_dir / "frames"
     frames_dir.mkdir(exist_ok=True, parents=True)
-    every = 5
+    every = 3
     for step, t, pos in zip(steps[::every], times[::every], positions[::every]):
         fig, ax = make_motion_frame(step, t, pos, labels)
         fig.savefig(frames_dir / f"motion_{step}")
