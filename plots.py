@@ -1,5 +1,9 @@
+import locale
+
 import matplotlib.pyplot as plt
 from celluloid import Camera
+
+locale.setlocale(locale.LC_NUMERIC, "ru_RU.UTF-8")
 
 
 def animate_motion(positions, labels, figax=None):
@@ -44,7 +48,7 @@ if __name__ == "__main__":
     import h5py
 
     data_path = Path("data") / "history.h5"
-    print(f"Чтение данных из '{data_path}'...")
+    print(f"Чтение данных из '{data_path}'...\n")
     with h5py.File(data_path, "r") as f:
         labels = f["labels"][:]
         steps = f["steps"][:]
@@ -65,7 +69,7 @@ if __name__ == "__main__":
     pics_dir.mkdir(exist_ok=True, parents=True)
     gif_path = pics_dir / "motion.gif"
     ani.save(gif_path, dpi=150, fps=25)
-    print(f"Анимация сохранена в '{gif_path}'")
+    print(f"Анимация сохранена в '{gif_path}'\n")
 
     print("Сохранение отдельных кадров...")
     frames_dir = pics_dir / "frames"
@@ -75,6 +79,6 @@ if __name__ == "__main__":
         fig, ax = make_motion_frame(step, t, pos, labels)
         fig.savefig(frames_dir / f"motion_{step}")
         plt.close(fig)
-    print(f"Кадры сохранены в '{frames_dir}'")
+    print(f"Кадры сохранены в '{frames_dir}'\n")
 
     print("Готово!")
