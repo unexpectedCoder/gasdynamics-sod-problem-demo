@@ -1,5 +1,7 @@
 from dataclasses import dataclass
+from pathlib import Path
 
+import h5py
 import numpy as np
 from numpy.random import default_rng
 from scipy.spatial import KDTree
@@ -151,13 +153,21 @@ class Model:
 
             # Сохранение снимков
             if step % save_every == 0:
+                x_centers, density, velocity_x, temperature, pressure = (
+                    self.compute_profiles()
+                )
+
                 history.append(
                     {
                         "step": step,
                         "time": step * dt,
-                        "pos": self.positions.copy(),
-                        "vel": self.velocities.copy(),
-                        "labels": self.labels,
+                        "positions": self.positions.copy(),
+                        "velocities": self.velocities.copy(),
+                        "x_centers": x_centers,
+                        "density": density,
+                        "velocity_x": velocity_x,
+                        "temperature": temperature,
+                        "pressure": pressure,
                     }
                 )
 
@@ -208,24 +218,104 @@ class Model:
             n_l=self.mp.n_particles_l, n_r=self.mp.n_particles_r, **self.mp.__dict__
         )
 
+    def save_history(self, history: list[dict], path: Path):
+        """Сохраняет историю симуляции в HDF5.
+
+        Структура файла:
+            labels          [N]       bool    — метки частиц (False=левые, True=правые)
+            steps           [S]       int32   — номера шагов
+            times           [S]       float64 — физическое время снимка
+            positions       [S, N, 2] float32 — координаты (x, y)
+            velocities      [S, N, 2] float32 — скорости (vx, vy)
+        """
+        N = len(self.labels)
+        M = len(history[0]["x_centers"])
+
+        steps = np.array([h["step"] for h in history], dtype=np.uint32)
+        times = np.array([h["time"] for h in history], dtype=np.float64)
+        positions = np.stack([h["positions"] for h in history]).astype(
+            np.float32
+        )  # [S, N, 2]
+        velocities = np.stack([h["velocities"] for h in history]).astype(
+            np.float32
+        )  # [S, N, 2]
+        x_centers = np.stack([h["x_centers"] for h in history]).astype(
+            np.float32
+        )  # [S, N]
+        pressures = np.stack([h["pressure"] for h in history]).astype(
+            np.float32
+        )  # [S, N]
+        densities = np.stack([h["density"] for h in history]).astype(
+            np.float32
+        )  # [S, N]
+        temperatures = np.stack([h["temperature"] for h in history]).astype(
+            np.float32
+        )  # [S, N]
+        velocities_x = np.stack([h["velocity_x"] for h in history]).astype(
+            np.float32
+        )  # [S, N]
+
+        with h5py.File(path, "w") as f:
+            f.attrs.update(self.parameters)
+
+            f.create_dataset("labels", data=self.labels)
+            f.create_dataset("steps", data=steps)
+            f.create_dataset("times", data=times)
+            f.create_dataset(
+                "positions",
+                data=positions,
+                chunks=(1, N, 2),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "velocities",
+                data=velocities,
+                chunks=(1, N, 2),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "x_centers",
+                data=x_centers,
+                chunks=(1, M),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "pressures",
+                data=pressures,
+                chunks=(1, M),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "densities",
+                data=densities,
+                chunks=(1, M),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "temperatures",
+                data=temperatures,
+                chunks=(1, M),
+                compression="gzip",
+                compression_opts=4,
+            )
+            f.create_dataset(
+                "velocities_x",
+                data=velocities_x,
+                chunks=(1, M),
+                compression="gzip",
+                compression_opts=4,
+            )
+
 
 if __name__ == "__main__":
-    import pickle
-
     model = Model(ModelParams())
-    history = model.run(steps=50_000, save_every=100)
+    history = model.run(steps=25_000, save_every=100)
 
-    with open("history.pkl", "wb") as f:
-        pickle.dump(history, f)
-
-    import matplotlib.pyplot as plt
-
-    x_centers, density, velocity_x, temperature, pressure = model.compute_profiles()
-
-    fig, ax = plt.subplots()
-    ax.plot(x_centers, density)
-    ax.plot(x_centers, pressure)
-    ax.set_xlabel("$x$")
-    ax.set_ylabel("Параметры газа")
-
-    plt.show()
+    data_dir = Path("data")
+    data_dir.mkdir(exist_ok=True, parents=True)
+    model.save_history(history, data_dir / "history.h5")
