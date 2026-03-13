@@ -239,9 +239,7 @@ class Model:
         velocities = np.stack([h["velocities"] for h in history]).astype(
             np.float32
         )  # [S, N, 2]
-        x_centers = np.stack([h["x_centers"] for h in history]).astype(
-            np.float32
-        )  # [S, N]
+        x_centers = history[0]["x_centers"].astype(np.float32)  # [S]
         pressures = np.stack([h["pressure"] for h in history]).astype(
             np.float32
         )  # [S, N]
@@ -278,7 +276,6 @@ class Model:
             f.create_dataset(
                 "x_centers",
                 data=x_centers,
-                chunks=(1, M),
                 compression="gzip",
                 compression_opts=4,
             )
@@ -314,7 +311,7 @@ class Model:
 
 if __name__ == "__main__":
     model = Model(ModelParams())
-    history = model.run(steps=25_000, save_every=100)
+    history = model.run(steps=20_000, save_every=100)
 
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True, parents=True)
