@@ -20,6 +20,8 @@ def animate_motion(positions, labels, figax=None):
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
     import h5py
 
     data_dir = Path("data")
@@ -36,8 +38,6 @@ if __name__ == "__main__":
         velocities_x = f["velocities_x"][:]
 
     plt.style.use("sciart.mplstyle")
-
-    from pathlib import Path
 
     ani = animate_motion(positions, labels)
     pics_dir = Path("pics")
