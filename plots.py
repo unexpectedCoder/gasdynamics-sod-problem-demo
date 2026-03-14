@@ -58,7 +58,7 @@ def animate_field(x, values, ylabel, color, num_id, figax=None):
     else:
         fig, ax = figax
 
-    ax.set(xlabel="$x$", ylabel=ylabel, ylim=(0, 1))
+    ax.set(xlabel="$x$", ylabel=ylabel, ylim=(None, 1))
     v_max = np.max(np.abs(values))
     norm_values = values / v_max if v_max != 0 else values
     (line,) = ax.plot(x, norm_values[0], c=color)
@@ -81,7 +81,7 @@ def make_field_frame(step, t, x, values, ylabel, color, num_id, figax=None):
     ax.set(
         xlabel="$x$",
         ylabel=ylabel,
-        ylim=(0, 1),
+        ylim=(None, 1),
         title=f"Итерация ${step}$, время ${round(t, 1)}$",
     )
 
@@ -91,7 +91,9 @@ def make_field_frame(step, t, x, values, ylabel, color, num_id, figax=None):
 def animate_combined(positions, labels, x, densities, pressures, figax=None):
     """Общая анимация: частицы, плотность, давление (3 строки)."""
     if figax is None:
-        fig, axes = plt.subplots(3, 1, num="combined-animation", figsize=(16, 10))
+        fig, axes = plt.subplots(
+            3, 1, num="combined-animation", figsize=(16, 10), sharex=True
+        )
     else:
         fig, axes = figax
 
@@ -99,13 +101,13 @@ def animate_combined(positions, labels, x, densities, pressures, figax=None):
 
     ax_motion.set(xlabel="$x$", ylabel="$y$", aspect="equal")
     ax_motion.grid(False)
-    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(0, 1))
-    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(0, 1))
+    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(None, 1))
+    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(None, 1))
 
     all_x = positions[:, :, 0]
     all_y = positions[:, :, 1]
-    ax_motion.set_xlim(all_x.min(), all_x.max())
-    ax_motion.set_ylim(all_y.min(), all_y.max())
+    ax_motion.set_xlim(None, all_x.max())
+    ax_motion.set_ylim(None, all_y.max())
 
     rho_max = np.max(np.abs(densities))
     p_max = np.max(np.abs(pressures))
@@ -131,7 +133,9 @@ def animate_combined(positions, labels, x, densities, pressures, figax=None):
 def make_combined_frame(step, t, positions, labels, x, rho, p, figax=None):
     """Общий кадр: частицы, плотность, давление (3 строки)."""
     if figax is None:
-        fig, axes = plt.subplots(3, 1, num=f"combined-{step}", figsize=(16, 10))
+        fig, axes = plt.subplots(
+            3, 1, num=f"combined-{step}", figsize=(16, 10), sharex=True
+        )
     else:
         fig, axes = figax
 
@@ -148,10 +152,10 @@ def make_combined_frame(step, t, positions, labels, x, rho, p, figax=None):
     ax_motion.grid(False)
 
     ax_density.plot(x, rho, c="b")
-    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(0, 1))
+    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(None, 1))
 
     ax_pressure.plot(x, p, c="g")
-    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(0, 1))
+    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(None, 1))
 
     fig.tight_layout()
     return fig, axes
@@ -213,7 +217,7 @@ if __name__ == "__main__":
     pics_dir = Path("pics")
     pics_dir.mkdir(exist_ok=True, parents=True)
     frames_dir = pics_dir / "frames"
-    every = 3
+    every = 5
 
     # --- Движение частиц ---
     print("Создание анимации движения...")
@@ -281,11 +285,11 @@ if __name__ == "__main__":
     rho_max = np.max(np.abs(densities))
     p_max = np.max(np.abs(pressures))
     for step, t, pos, rho, p in zip(
-        steps[:: every + 2],
-        times[:: every + 2],
-        positions[:: every + 2],
-        densities[:: every + 2],
-        pressures[:: every + 2],
+        steps[::every],
+        times[::every],
+        positions[::every],
+        densities[::every],
+        pressures[::every],
     ):
         fig, axes = make_combined_frame(
             step,

@@ -51,7 +51,7 @@ class Model:
         return positions
 
     def _assign_velocities(self, n: int, T: float, macro_velo=0.0):
-        sigma_v = np.sqrt(T)
+        sigma_v = np.sqrt(T / self.mp.m)
         vx = self.rng.normal(macro_velo, sigma_v, n)
         vy = self.rng.normal(0.0, sigma_v, n)
         # Вычтем среднюю скорость (убрать дрейф):
@@ -154,7 +154,7 @@ class Model:
             # Сохранение снимков
             if step % save_every == 0:
                 x_centers, density, velocity_x, temperature, pressure = (
-                    self.compute_profiles()
+                    self.compute_profiles(pairs=pairs)
                 )
 
                 history.append(
@@ -173,42 +173,96 @@ class Model:
 
         return history
 
-    def compute_profiles(self, N_bins=100):
+    def compute_profiles(self, N_bins=300, pairs: np.ndarray | None = None):
         pos = self.positions
         vel = self.velocities
+        mass = self.mp.m
 
         dx_bin = self.mp.Lx / N_bins
         bin_idx = np.clip((pos[:, 0] / dx_bin).astype(int), 0, N_bins - 1)
 
         x_centers = (np.arange(N_bins) + 0.5) * dx_bin
 
-        density = np.zeros(N_bins)
-        velocity_x = np.zeros(N_bins)
-        temperature = np.zeros(N_bins)
-        pressure = np.zeros(N_bins)
+        # 1D "линейная" числовая плотность вдоль x (интегрировано по y)
+        # n_1d [частиц/длина] = count / dx
+        counts = np.bincount(bin_idx, minlength=N_bins).astype(np.float64)
+        density = counts / dx_bin
 
-        for b in range(N_bins):
-            mask = bin_idx == b
-            count = np.sum(mask)
+        # Макроскорости по бинам
+        vx = vel[:, 0]
+        vy = vel[:, 1]
 
-            if count == 0:
-                continue
+        sum_vx = np.bincount(bin_idx, weights=vx, minlength=N_bins)
+        sum_vy = np.bincount(bin_idx, weights=vy, minlength=N_bins)
 
-            area = dx_bin * self.mp.Ly
-            density[b] = count / area  # числовая плотность n
+        velocity_x = np.zeros(N_bins, dtype=np.float64)
+        mean_vy = np.zeros(N_bins, dtype=np.float64)
+        np.divide(sum_vx, counts, out=velocity_x, where=counts > 0)
+        np.divide(sum_vy, counts, out=mean_vy, where=counts > 0)
 
-            vx = vel[mask, 0]
-            vy = vel[mask, 1]
+        # Температура из кинетики флуктуаций (2D, k_B = 1):
+        # T = (m/2) * (Var(vx) + Var(vy))
+        sum_vx2 = np.bincount(bin_idx, weights=vx * vx, minlength=N_bins)
+        sum_vy2 = np.bincount(bin_idx, weights=vy * vy, minlength=N_bins)
 
-            velocity_x[b] = np.mean(vx)  # <v_x> — макро-скорость
+        mean_vx2 = np.zeros(N_bins, dtype=np.float64)
+        mean_vy2 = np.zeros(N_bins, dtype=np.float64)
+        np.divide(sum_vx2, counts, out=mean_vx2, where=counts > 0)
+        np.divide(sum_vy2, counts, out=mean_vy2, where=counts > 0)
 
-            # Температура: T = m·<(v - <v>)²> / (d·k_B), d = 2 (2D)
-            dvx = vx - velocity_x[b]
-            dvy = vy - np.mean(vy)
-            temperature[b] = 0.5 * np.mean(dvx**2 + dvy**2)  # T = <δv²>/2 при k_B=m=1
+        var_vx = mean_vx2 - velocity_x * velocity_x
+        var_vy = mean_vy2 - mean_vy * mean_vy
 
-            # Давление идеального газа: p = n·T (в 2D при k_B = 1)
-            pressure[b] = density[b] * temperature[b]
+        temperature = 0.5 * mass * (var_vx + var_vy)
+        temperature = np.where(counts > 0, temperature, 0.0)
+
+        # Давление: идеальный вклад + вириальный вклад от парных взаимодействий.
+        # Здесь давление трактуем как 2D-давление (усреднение по площади бина A = dx * Ly):
+        # p = n_2d * T + (1/(d*A)) * sum_{pairs in bin} (r_ij · F_ij), d = 2
+        # где n_2d = count / (dx*Ly) = density / Ly
+        area_bin = dx_bin * self.mp.Ly
+        n2d = counts / area_bin
+        p_ideal = n2d * temperature
+
+        # Вириальный вклад распределяем по бинам по x-координате середины пары (Irving–Kirkwood midpoint)
+        if pairs is None:
+            pairs = self._find_neighbors()
+        pairs = np.asarray(pairs, dtype=np.int64).reshape(-1, 2)
+
+        p_virial = np.zeros(N_bins, dtype=np.float64)
+        if pairs.shape[0] > 0:
+            i = pairs[:, 0]
+            j = pairs[:, 1]
+
+            dr = pos[i] - pos[j]
+            r2 = np.sum(dr * dr, axis=1)
+
+            # Отсечение (на всякий случай) и защита от деления на 0
+            mask = r2 < self.potential.r_cut**2
+            if np.any(mask):
+                i = i[mask]
+                j = j[mask]
+                r2 = np.maximum(r2[mask], 1e-10)
+
+                inv_r2 = (self.potential.sigma * self.potential.sigma) / r2
+                inv_r6 = inv_r2 * inv_r2 * inv_r2
+                inv_r12 = inv_r6 * inv_r6
+
+                # F(r)/r = 24ε/r² · [2(σ/r)^12 − (σ/r)^6]
+                f_over_r = 24 * self.potential.epsilon / r2 * (2 * inv_r12 - inv_r6)
+
+                # r_ij · F_ij = (F/r) * r^2
+                r_dot_f = f_over_r * r2
+
+                x_mid = 0.5 * (pos[i, 0] + pos[j, 0])
+                bin_mid = np.clip((x_mid / dx_bin).astype(int), 0, N_bins - 1)
+
+                virial_sum = np.bincount(bin_mid, weights=r_dot_f, minlength=N_bins)
+
+                # d = 2 (2D)
+                p_virial = virial_sum / (2.0 * area_bin)
+
+        pressure = p_ideal + p_virial
 
         return x_centers, density, velocity_x, temperature, pressure
 
@@ -311,7 +365,7 @@ class Model:
 
 if __name__ == "__main__":
     model = Model(ModelParams())
-    history = model.run(steps=20_000, save_every=100)
+    history = model.run(steps=10_000, save_every=100)
 
     data_dir = Path("data")
     data_dir.mkdir(exist_ok=True, parents=True)
