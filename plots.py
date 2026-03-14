@@ -2,7 +2,7 @@ import locale
 
 import matplotlib.pyplot as plt
 import numpy as np
-from celluloid import Camera
+from matplotlib.animation import FuncAnimation
 
 locale.setlocale(locale.LC_NUMERIC, "ru_RU.UTF-8")
 
@@ -13,15 +13,23 @@ def animate_motion(positions, labels, figax=None):
     else:
         fig, ax = figax
 
-    camera = Camera(fig)
     ax.set(xlabel="$x$", ylabel="$y$", aspect="equal")
     ax.grid(False)
-    for xy in positions:
-        ax.plot(*xy[~labels].T, ls="", marker=".", markersize=1, c="r")
-        ax.plot(*xy[labels].T, ls="", marker=".", markersize=1, c="b")
-        camera.snap()
+    (line_r,) = ax.plot([], [], ls="", marker=".", markersize=1, c="r")
+    (line_b,) = ax.plot([], [], ls="", marker=".", markersize=1, c="b")
 
-    return camera.animate()
+    all_x = positions[:, :, 0]
+    all_y = positions[:, :, 1]
+    ax.set_xlim(all_x.min(), all_x.max())
+    ax.set_ylim(all_y.min(), all_y.max())
+
+    def update(frame):
+        xy = positions[frame]
+        line_r.set_data(xy[~labels, 0], xy[~labels, 1])
+        line_b.set_data(xy[labels, 0], xy[labels, 1])
+        return line_r, line_b
+
+    return FuncAnimation(fig, update, frames=len(positions), blit=True)
 
 
 def make_motion_frame(step, time, positions, labels, figax=None):
@@ -35,7 +43,7 @@ def make_motion_frame(step, time, positions, labels, figax=None):
     ax.set(
         xlabel="$x$",
         ylabel="$y$",
-        title=f"Итерация ${step}$, время ${time:.2f}$",
+        title=f"Итерация ${step}$, время ${round(time, 1)}$",
         aspect="equal",
     )
     ax.grid(False)
@@ -50,14 +58,16 @@ def animate_field(x, values, ylabel, color, num_id, figax=None):
     else:
         fig, ax = figax
 
-    camera = Camera(fig)
     ax.set(xlabel="$x$", ylabel=ylabel, ylim=(0, 1))
     v_max = np.max(np.abs(values))
-    for v in values:
-        ax.plot(x, v / v_max if v_max != 0 else v, c=color)
-        camera.snap()
+    norm_values = values / v_max if v_max != 0 else values
+    (line,) = ax.plot(x, norm_values[0], c=color)
 
-    return camera.animate()
+    def update(frame):
+        line.set_ydata(norm_values[frame])
+        return (line,)
+
+    return FuncAnimation(fig, update, frames=len(values), blit=True)
 
 
 def make_field_frame(step, t, x, values, ylabel, color, num_id, figax=None):
@@ -72,10 +82,79 @@ def make_field_frame(step, t, x, values, ylabel, color, num_id, figax=None):
         xlabel="$x$",
         ylabel=ylabel,
         ylim=(0, 1),
-        title=f"Итерация ${step}$, время ${t:.2f}$",
+        title=f"Итерация ${step}$, время ${round(t, 1)}$",
     )
 
     return fig, ax
+
+
+def animate_combined(positions, labels, x, densities, pressures, figax=None):
+    """Общая анимация: частицы, плотность, давление (3 строки)."""
+    if figax is None:
+        fig, axes = plt.subplots(3, 1, num="combined-animation", figsize=(16, 10))
+    else:
+        fig, axes = figax
+
+    ax_motion, ax_density, ax_pressure = axes
+
+    ax_motion.set(xlabel="$x$", ylabel="$y$", aspect="equal")
+    ax_motion.grid(False)
+    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(0, 1))
+    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(0, 1))
+
+    all_x = positions[:, :, 0]
+    all_y = positions[:, :, 1]
+    ax_motion.set_xlim(all_x.min(), all_x.max())
+    ax_motion.set_ylim(all_y.min(), all_y.max())
+
+    rho_max = np.max(np.abs(densities))
+    p_max = np.max(np.abs(pressures))
+    norm_rho = densities / rho_max if rho_max != 0 else densities
+    norm_p = pressures / p_max if p_max != 0 else pressures
+
+    (line_r,) = ax_motion.plot([], [], ls="", marker=".", markersize=1, c="r")
+    (line_b,) = ax_motion.plot([], [], ls="", marker=".", markersize=1, c="b")
+    (line_rho,) = ax_density.plot(x, norm_rho[0], c="b")
+    (line_p,) = ax_pressure.plot(x, norm_p[0], c="g")
+
+    def update(frame):
+        xy = positions[frame]
+        line_r.set_data(xy[~labels, 0], xy[~labels, 1])
+        line_b.set_data(xy[labels, 0], xy[labels, 1])
+        line_rho.set_ydata(norm_rho[frame])
+        line_p.set_ydata(norm_p[frame])
+        return line_r, line_b, line_rho, line_p
+
+    return FuncAnimation(fig, update, frames=len(positions), blit=True)
+
+
+def make_combined_frame(step, t, positions, labels, x, rho, p, figax=None):
+    """Общий кадр: частицы, плотность, давление (3 строки)."""
+    if figax is None:
+        fig, axes = plt.subplots(3, 1, num=f"combined-{step}", figsize=(16, 10))
+    else:
+        fig, axes = figax
+
+    ax_motion, ax_density, ax_pressure = axes
+
+    ax_motion.plot(*positions[~labels].T, ls="", marker=".", markersize=1, c="r")
+    ax_motion.plot(*positions[labels].T, ls="", marker=".", markersize=1, c="b")
+    ax_motion.set(
+        xlabel="$x$",
+        ylabel="$y$",
+        title=f"Итерация ${step}$, время ${round(t, 1)}$",
+        aspect="equal",
+    )
+    ax_motion.grid(False)
+
+    ax_density.plot(x, rho, c="b")
+    ax_density.set(xlabel="$x$", ylabel=r"$\mathrm{\rho}$", ylim=(0, 1))
+
+    ax_pressure.plot(x, p, c="g")
+    ax_pressure.set(xlabel="$x$", ylabel="$p$", ylim=(0, 1))
+
+    fig.tight_layout()
+    return fig, axes
 
 
 def animate_pressure(x, pressures, figax=None):
@@ -188,5 +267,37 @@ if __name__ == "__main__":
             fig.savefig(field_frames_dir / f"{fname_prefix}_{step}")
             plt.close(fig)
         print(f"Кадры сохранены в '{field_frames_dir}'\n")
+
+    # --- Общая анимация ---
+    print("Создание общей анимации (motion + density + pressure)...")
+    ani_combined = animate_combined(positions, labels, x_centers, densities, pressures)
+    path = pics_dir / "combined.gif"
+    ani_combined.save(path, dpi=150, fps=25)
+    print(f"Анимация сохранена в '{path}'\n")
+
+    combined_frames_dir = frames_dir / "combined"
+    combined_frames_dir.mkdir(exist_ok=True, parents=True)
+    print("Сохранение кадров общей анимации...")
+    rho_max = np.max(np.abs(densities))
+    p_max = np.max(np.abs(pressures))
+    for step, t, pos, rho, p in zip(
+        steps[:: every + 2],
+        times[:: every + 2],
+        positions[:: every + 2],
+        densities[:: every + 2],
+        pressures[:: every + 2],
+    ):
+        fig, axes = make_combined_frame(
+            step,
+            t,
+            pos,
+            labels,
+            x_centers,
+            rho / rho_max if rho_max != 0 else rho,
+            p / p_max if p_max != 0 else p,
+        )
+        fig.savefig(combined_frames_dir / f"combined_{step}")
+        plt.close(fig)
+    print(f"Кадры сохранены в '{combined_frames_dir}'\n")
 
     print("Готово!")
