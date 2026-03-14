@@ -133,7 +133,7 @@ class Model:
 
         # Начальные силы
         pairs = self._find_neighbors()
-        acc = self._compute_forces(pairs)
+        acc = self._compute_forces(pairs) / mass
 
         # Массивы для записи (каждые save_every шагов)
         save_every = kw.get("save_every", 100)
@@ -143,12 +143,12 @@ class Model:
             v_max = np.max(np.linalg.norm(self.velocities, axis=1))
             dt = min(5e-3, Co * sigma / max(v_max, 1e-10))
 
-            self.positions += self.velocities * dt + 0.5 * (acc / mass) * dt**2
+            self.positions += self.velocities * dt + 0.5 * acc * dt**2
             self._apply_walls()
-            self.velocities += 0.5 * (acc / mass) * dt
+            self.velocities += 0.5 * acc * dt
             pairs = self._find_neighbors()
-            acc_new = self._compute_forces(pairs)
-            self.velocities += 0.5 * (acc_new / mass) * dt
+            acc_new = self._compute_forces(pairs) / mass
+            self.velocities += 0.5 * acc_new * dt
             acc = acc_new
 
             # Сохранение снимков
