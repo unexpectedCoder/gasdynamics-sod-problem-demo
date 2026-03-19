@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class ModelParams:
+class SolverParams:
     Lx: float = 1000.0
     Ly: float = 200.0
     rho_l: float = 0.8

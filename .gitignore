@@ -6,9 +6,13 @@ __*__
 *.pkl
 *.h5
 *.hdf5
+*.npz
 
 *.gif
 *.pdf
 *.svg
 *.png
 *.jpg
+
+*.cdw
+*.bak

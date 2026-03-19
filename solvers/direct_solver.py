@@ -7,7 +7,7 @@ from numpy.random import default_rng
 from scipy.spatial import KDTree
 from tqdm import trange
 
-from model_params import ModelParams
+from solvers.direct_solver_params import SolverParams
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class Potential:
 
 
 class Model:
-    def __init__(self, mp: ModelParams, pot=Potential(), rng=default_rng()):
+    def __init__(self, mp: SolverParams, pot=Potential(), rng=default_rng()):
         self.mp = mp
         self.potential = pot
         self.rng = rng
@@ -364,7 +364,7 @@ class Model:
 
 
 if __name__ == "__main__":
-    model = Model(ModelParams())
+    model = Model(SolverParams())
     history = model.run(steps=10_000, save_every=100)
 
     data_dir = Path("data")
